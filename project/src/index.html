@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="X-UA-Compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<script src="https://d3js.org/d3.v4.js"></script>
+	<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs=" crossorigin="anonymous"></script>
+	<script src="jquery-csv.js"></script>
+	<title>Project</title>
+</head>
+
+<style>
+	html, body {
+		width: 100%;
+		height: 100%;
+		padding: 0;
+		margin: 0
+	}
+</style>
+
+<body>
+	<div id="graph1"></div>
+</body>
+
+</html>
+
+<script>
+	// set the dimensions and margins of the graph
+	var data = null;
+
+	var margin = {
+			top: 10,
+			right: 20,
+			bottom: 30,
+			left: 50
+		},
+		width = "1000",
+		height = "500";
+
+	// append the svg object to the body of the page
+	var svg = d3.select("#graph1")
+		.append("svg")
+		.attr("width", width + margin.left + margin.right)
+		.attr("height", height + margin.top + margin.bottom)
+		.append("g")
+		.attr("transform",
+			"translate(" + margin.left + "," + margin.top + ")");
+
+
+	function cleanData(data) {
+		data.forEach((row,i) => {
+			for(let key in row) {
+				if(row[key] === undefined || row[key === null]) {
+					row[key] = ""
+				}
+			}
+		});
+
+		console.table(data)
+
+		return data
+	}
+
+	d3.csv("GME.csv", function(d) {
+		return {
+			date: new Date(d.Date),
+			open: d.Open,
+			high: d.High,
+			low: d.Low,
+			volume: d.Volume
+		};
+	}, function(error, rows) {
+
+		// var data = cleanData(rows)
+		var data = rows
+
+		var x = d3.scaleTime()
+		.domain(d3.extent(data, function(d) { 
+			return d.date; 
+		}))
+		.range([0, width]);
+
+		// // Add X axis
+		// var x = d3.scaleDate()
+		// 	.domain([0, 10000])
+		// 	.range([0, width]);
+
+		svg.append("g")
+			.attr("transform", "translate(0," + height + ")")
+			.call(d3.axisBottom(x));
+
+		// Add Y axis
+		var y = d3.scaleLinear()
+			.domain([0, 500])
+			.range([height, 0]);
+		svg.append("g")
+			.call(d3.axisLeft(y));
+
+		// Add a scale for bubble size
+		var z = d3.scaleLinear()
+			.domain([100000, 200000000])
+			.range([1, 40]);
+
+		// Add dots
+		svg.append('g')
+			.selectAll("dot")
+			.data(data)
+			.enter()
+			.append("circle")
+			.attr("cx", function (d) {
+				return x(d.date);
+			})
+			.attr("cy", function (d) {
+				return y(d.high);
+			})
+			.attr("r", function (d) {
+				return z(d.volume);
+			})
+			.style("fill", "#69b3a2")
+			.style("opacity", "0.7")
+			.attr("stroke", "black")
+	});
+
+
+
+</script>
