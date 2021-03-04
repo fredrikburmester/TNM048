@@ -5,14 +5,16 @@
 	<meta charset="UTF-8">
 	<meta http-equiv="X-UA-Compatible" content="IE=edge">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
-	<script src="https://d3js.org/d3.v4.js"></script>
-	<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js" integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs=" crossorigin="anonymous"></script>
-	<script src="jquery-csv.js"></script>
+	<script src="https://d3js.org/d3.v5.js"></script>
+	<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
+		integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs=" crossorigin="anonymous"></script>
+	<script src="/static/js/jquery-csv.js"></script>
 	<title>Project</title>
 </head>
 
 <style>
-	html, body {
+	html,
+	body {
 		width: 100%;
 		height: 100%;
 		padding: 0;
@@ -27,7 +29,174 @@
 </html>
 
 <script>
-	// set the dimensions and margins of the graph
+	/*
+	 * Clean the data based on date, so that both data sets match in date
+	 *
+	 * @param {obejct} data1
+	 * @param2 {obejct} data2
+	 *
+	 * @return {object} 
+	 */
+	function cleanData(data1, data2, startDate, endDate) {
+		var new_data1 = []
+		var new_data2 = []
+
+		startDate.setHours(0,0,0,0)
+		endDate.setHours(0,0,0,0)
+
+		console.log(data1)
+		console.log(data2)
+
+		console.log(startDate, endDate)
+
+		data1.forEach(element => {
+			element.date.setHours(0,0,0,0)
+			if (element.date >= startDate && element.date <= endDate && element.date.getDay() != 6 && element.date.getDay() != 0) {	
+				new_data1.push(element)
+			}
+			
+			data2.forEach(element2 => {
+				if (element.date >= startDate && element.date <= endDate && element.date.getDay() != "6" && element.date.getDay() != "0") {
+					console.log(element.date.getDay(), element)
+				}
+			});
+		});
+
+		data2.forEach(element => {
+			element.date.setHours(0,0,0,0)
+			if (element.date >= startDate && element.date <= endDate && element.date.getDay() != "6" && element.date.getDay() != "0") {
+				
+				console.log(element.date.getDay(), element)
+			}
+		});
+
+
+
+		if (new_data1.length != new_data2.length) {
+			console.log(new_data1.length, new_data2.length)
+			throw "Datasets are not the same length!"
+		} else
+			return {
+				data1: data1,
+				data2: data2
+			}
+	}
+
+	/*
+	 * Calculate interractions per day, like posts, comments and total score. Return array with that informaion
+	 *
+	 * @param {obejct} data
+	 * @return {object} interactions
+	 */
+	function calculateDailyStats(data) {
+		var interactions = []
+
+		var now = new Date();
+		for (var d = new Date(2021, 0, 28); d <= now; d.setDate(d.getDate() + 1)) {
+			let posts_this_day = []
+			let total_score_this_day = 0
+			let todays_date = `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`
+
+			for (let i = 0; i < data.length; i++) {
+				const post = data[i];
+				
+				let post_date = `${post.date.getFullYear()}-${post.date.getMonth()+1}-${post.date.getDate()}`
+				
+				if (post_date == todays_date ) {
+					posts_this_day.push(post)
+					total_score_this_day += parseInt(post.score)
+				}
+			}
+
+			// Create object and push into interactions array
+			let day = {
+				date: new Date(todays_date),
+				posts: posts_this_day.length,
+				score: total_score_this_day
+			}
+
+			// if(posts_this_day != 0)
+				interactions.push(day)
+		}
+
+		return interactions
+	}
+
+	/*
+	 * Calculate how big impact a certain value had on that day
+	 *
+	 * @param {obejct} data1
+	 * @param {obejct} data2
+	 * @return {object}
+	 */
+	function checkImpact(data1, data2) {
+		// if increase in price on that day
+		// check variables in reddit posts -> add 1 to impact variable
+		var {
+			num_of_posts_impact,
+			num_of_comments_impact,
+			score_impact
+		} = 0
+
+		if (data1.length != data2.length)
+			throw "Datasets are not the same length!"
+		else {
+			for (let i = 1; i < data1.length; i++) {
+				const price_high_yesterday = data1[i - 1].high
+				const price_high_today = data1[i].high
+				const post_score_yesterday = data2[i].score
+				const post_score = data2[i].score
+
+				if (price_high_today > price_high_yesterday) {
+					continue
+				}
+			}
+		}
+	}
+
+	async function loadData() {
+		const GME = await d3.csv("/static/data/GME.csv", function (d) {
+			return {
+				date: new Date(d.Date),
+				open: d.Open,
+				high: d.High,
+				low: d.Low,
+				volume: d.Volume
+			};
+		});
+
+		const REDDIT = await d3.csv("/static/data/reddit_wsb.csv", function (d) {
+			return {
+				title: d.title,
+				score: d.score,
+				comments: d.comms_num,
+				date: new Date(d.timestamp),
+				text: d.body
+			};
+		});
+
+		return {reddit: REDDIT, gme: GME}
+	}
+
+	/* MAIN */
+	loadData().then(obj => {
+		const REDDIT = obj.reddit
+		const GME = obj.gme
+
+		var small_reddit = []
+		for (let i = REDDIT.length-10000; i < REDDIT.length; i++) {
+			const e = REDDIT[i];
+			small_reddit.push(e)
+		}
+		var interactions = calculateDailyStats(REDDIT)
+		console.log(interactions)
+
+		var cleaned_data = cleanData(GME, interactions, new Date("2021-01-28"),new Date("2021-03-01"))
+		console.log(cleaned_data)
+
+	})
+	/* GRAPHING FUNCTIONS */
+
 	var data = null;
 
 	var margin = {
@@ -40,89 +209,80 @@
 		height = "500";
 
 	// append the svg object to the body of the page
-	var svg = d3.select("#graph1")
-		.append("svg")
-		.attr("width", width + margin.left + margin.right)
-		.attr("height", height + margin.top + margin.bottom)
-		.append("g")
-		.attr("transform",
-			"translate(" + margin.left + "," + margin.top + ")");
+	// var svg = d3.select("#graph1")
+	// 	.append("svg")
+	// 	.attr("width", width + margin.left + margin.right)
+	// 	.attr("height", height + margin.top + margin.bottom)
+	// 	.append("g")
+	// 	.attr("transform",
+	// 		"translate(" + margin.left + "," + margin.top + ")");
 
 
-	function cleanData(data) {
-		data.forEach((row,i) => {
-			for(let key in row) {
-				if(row[key] === undefined || row[key === null]) {
-					row[key] = ""
-				}
-			}
-		});
+	// function cleanData(data) {
+	// 	data.forEach((row, i) => {
+	// 		for (let key in row) {
+	// 			if (row[key] === undefined || row[key === null]) {
+	// 				row[key] = ""
+	// 			}
+	// 		}
+	// 	});
 
-		console.table(data)
+	// 	console.table(data)
 
-		return data
-	}
+	// 	return data
+	// }
 
-	d3.csv("GME.csv", function(d) {
-		return {
-			date: new Date(d.Date),
-			open: d.Open,
-			high: d.High,
-			low: d.Low,
-			volume: d.Volume
-		};
-	}, function(error, rows) {
+	// d3.csv("/static/data/GME.csv", function (d) {
+	// 	return {
+	// 		date: new Date(d.Date),
+	// 		open: d.Open,
+	// 		high: d.High,
+	// 		low: d.Low,
+	// 		volume: d.Volume
+	// 	};
+	// }, function (error, rows) {
 
-		// var data = cleanData(rows)
-		var data = rows
+	// 	var data = rows
 
-		var x = d3.scaleTime()
-		.domain(d3.extent(data, function(d) { 
-			return d.date; 
-		}))
-		.range([0, width]);
+	// 	var x = d3.scaleTime()
+	// 		.domain(d3.extent(data, function (d) {
+	// 			return d.date;
+	// 		}))
+	// 		.range([0, width]);
 
-		// // Add X axis
-		// var x = d3.scaleDate()
-		// 	.domain([0, 10000])
-		// 	.range([0, width]);
+	// 	svg.append("g")
+	// 		.attr("transform", "translate(0," + height + ")")
+	// 		.call(d3.axisBottom(x));
 
-		svg.append("g")
-			.attr("transform", "translate(0," + height + ")")
-			.call(d3.axisBottom(x));
+	// 	// Add Y axis
+	// 	var y = d3.scaleLinear()
+	// 		.domain([0, 500])
+	// 		.range([height, 0]);
+	// 	svg.append("g")
+	// 		.call(d3.axisLeft(y));
 
-		// Add Y axis
-		var y = d3.scaleLinear()
-			.domain([0, 500])
-			.range([height, 0]);
-		svg.append("g")
-			.call(d3.axisLeft(y));
+	// 	// Add a scale for bubble size
+	// 	var z = d3.scaleLinear()
+	// 		.domain([100000, 200000000])
+	// 		.range([1, 40]);
 
-		// Add a scale for bubble size
-		var z = d3.scaleLinear()
-			.domain([100000, 200000000])
-			.range([1, 40]);
-
-		// Add dots
-		svg.append('g')
-			.selectAll("dot")
-			.data(data)
-			.enter()
-			.append("circle")
-			.attr("cx", function (d) {
-				return x(d.date);
-			})
-			.attr("cy", function (d) {
-				return y(d.high);
-			})
-			.attr("r", function (d) {
-				return z(d.volume);
-			})
-			.style("fill", "#69b3a2")
-			.style("opacity", "0.7")
-			.attr("stroke", "black")
-	});
-
-
-
+	// 	// Add dots
+	// 	svg.append('g')
+	// 		.selectAll("dot")
+	// 		.data(data)
+	// 		.enter()
+	// 		.append("circle")
+	// 		.attr("cx", function (d) {
+	// 			return x(d.date);
+	// 		})
+	// 		.attr("cy", function (d) {
+	// 			return y(d.high);
+	// 		})
+	// 		.attr("r", function (d) {
+	// 			return z(d.volume);
+	// 		})
+	// 		.style("fill", "#69b3a2")
+	// 		.style("opacity", "0.7")
+	// 		.attr("stroke", "black")
+	// });
 </script>
