@@ -194,7 +194,7 @@
 	}
 
 	async function loadData() {
-		const GME = await d3.csv("/static/data/GME.csv", function (d) {
+		var gme = await d3.csv("/static/data/GME.csv", function (d) {
 			return {
 				date: new Date(d.Date),
 				open: d.Open,
@@ -204,7 +204,7 @@
 			};
 		});
 
-		const REDDIT = await d3.csv("/static/data/reddit_wsb.csv", function (d) {
+		var reddit = await d3.csv("/static/data/reddit_wsb.csv", function (d) {
 			return {
 				title: d.title,
 				score: d.score,
@@ -215,34 +215,63 @@
 		});
 
 		return {
-			reddit: REDDIT,
-			gme: GME
+			reddit: reddit,
+			gme: gme
 		}
 	}
 
 	function normalizeData(data) {
-		// var normalized_data
+		let data_copy = []
 
-		for (key in data[0]) {
-			let max = Math.max.apply(Math, data.map(function (e) {
-				return e[key];
-			}))
-			let min = Math.min.apply(Math, data.map(function (e) {
-				return e[key];
-			}))
+		for (let i = 0; i < data.length; i++) {
 
-			data.forEach(e => {
-				if (key != "date")
-					e[key] = (e[key] - min) / (max - min)
-				else {
-					let d = `${e[key].getFullYear()}${e[key].getMonth()}${e[key].getDate()}`
-					console.log(d)
-					e[key] = "d-" + d.toString()
+			data_copy[i] = {
+				date: null,
+				posts: null,
+				score: null,
+				score_per_post: null,
+				score_delta: null,
+				posts_delta: null,
+				high: null,
+				high_delta: null,
+				low: null,
+				low_delta: null,
+				volume: null,
+				volume_delta: null
+			}
+
+			for (key in data[0]) {
+				let max = Math.max.apply(Math, data.map(function (e) {
+					return e[key];
+				}))
+				let min = Math.min.apply(Math, data.map(function (e) {
+					return e[key];
+				}))
+
+				if (key != "date") {
+					data_copy[i][key] = (data[i][key] - min) / (max - min)
+				} else {
+					let d = `${data[i][key].getFullYear()}${data[i][key].getMonth()}${data[i][key].getDate()}`
+					data_copy[i][key] = "d-" + d
 				}
-			});
+			}
 		}
 
-		return data
+		return data_copy
+	}
+
+	var colors = []
+	function color(date) {
+		return colors.filter(c => c.date == date)[0].color
+	}
+
+	function generateRandomColor() {
+		var letters = '0123456789ABCDEF';
+		var color = '#';
+		for (var i = 0; i < 6; i++) {
+			color += letters[Math.floor(Math.random() * 16)];
+		}
+		return color;
 	}
 
 	/* MAIN */
@@ -252,27 +281,164 @@
 		/* ---- Load and calculate data ---- */
 		/*************************************/
 
-		const REDDIT = obj.reddit
-		const GME = obj.gme
+		var reddit_data = obj.reddit
+		var GME_data = obj.gme
 
-		var dailyStatsForReddit = calculateDailyStatsForReddit(REDDIT)
+		var dailyStatsForReddit = calculateDailyStatsForReddit(reddit_data)
 
-		var comparisonData = calculateComparisonData(GME, dailyStatsForReddit, new Date("2021-03-01"))
+		var comparisonData = calculateComparisonData(GME_data, dailyStatsForReddit, new Date("2021-03-01"));
 
-		normalized_data = normalizeData(comparisonData)
+		/************************/
+		/* ---- Line graph ---- */
+		/************************/
 
-		console.log("Normalized data: ", normalized_data)
+		// var data = [...comparisonData];
+		var data = normalizeData(comparisonData)
+		console.log(data)
+
+		// Dimension of the whole chart. Only one size since it has to be square
+		var marginWhole = {
+				top: 40,
+				right: 40,
+				bottom: 40,
+				left: 40
+			},
+			sizeWhole = 1000 - marginWhole.left - marginWhole.right
+
+		// Create the svg area
+		var svg = d3.select("#graph1")
+			.append("svg")
+			.attr("width", sizeWhole + marginWhole.left + marginWhole.right)
+			.attr("height", sizeWhole + marginWhole.top + marginWhole.bottom)
+			.append("g")
+			.attr("transform", "translate(" + marginWhole.left + "," + marginWhole.top + ")");
+
+		// What are the numeric variables in this dataset? How many do I have
+		var allVar = ["posts","score", "high_delta", " low"]
+
+		var numVar = allVar.length
+
+		// Now I can compute the size of a single chart
+		mar = 30
+		size = sizeWhole / numVar
+
+		// ----------------- //
+		// Scales
+		// ----------------- //
+
+		// Create a scale: gives the position of each pair each variable
+		var position = d3.scalePoint()
+			.domain(allVar)
+			.range([0, sizeWhole - size])
+
+		// Color scale: give me a specie name, I return a color
+		colors = data.map(obj => {
+			return {
+				date: obj.date,
+				color: generateRandomColor()
+			}
+		})
+
+		// ------------------------------- //
+		// Add charts
+		// ------------------------------- //
+		for (i in allVar) {
+			for (j in allVar) {
+
+				// Get current variable name
+				var var1 = allVar[i]
+				var var2 = allVar[j]
+
+				// If var1 == var2 i'm on the diagonal, I skip that
+				if (var1 === var2) {
+					continue;
+				}
+
+				// Add X Scale of each graph
+				xextent = d3.extent(data, function (d) {
+					return +d[var1]
+				})
+				var x = d3.scaleLinear()
+					.domain(xextent).nice()
+					.range([0, size - 2 * mar]);
+
+				// Add Y Scale of each graph
+				yextent = d3.extent(data, function (d) {
+					return +d[var2]
+				})
+				var y = d3.scaleLinear()
+					.domain(yextent).nice()
+					.range([size - 2 * mar, 0]);
+
+				// Add a 'g' at the right position
+				var tmp = svg
+					.append('g')
+					.attr("transform", "translate(" + (position(var1) + mar) + "," + (position(var2) + mar) + ")");
+
+				// Add X and Y axis in tmp
+				tmp.append("g")
+					.attr("transform", "translate(" + 0 + "," + (size - mar * 2) + ")")
+					.call(d3.axisBottom(x).ticks(3));
+				tmp.append("g")
+					.call(d3.axisLeft(y).ticks(3));
+
+				// Add circle
+				tmp
+					.selectAll("myCircles")
+					.data(data)
+					.enter()
+					.append("circle")
+					.attr("cx", function (d) {
+						return x(+d[var1])
+					})
+					.attr("cy", function (d) {
+						return y(+d[var2])
+					})
+					.attr("r", 3)
+					.attr("fill", function (d) {
+						return color(d.date)
+					})
+			}
+		}
+
+
+		// ------------------------------- //
+		// Add variable names = diagonal
+		// ------------------------------- //
+		for (i in allVar) {
+			for (j in allVar) {
+				// If var1 == var2 i'm on the diagonal, otherwisee I skip
+				if (i != j) {
+					continue;
+				}
+				// Add text
+				var var1 = allVar[i]
+				var var2 = allVar[j]
+				svg
+					.append('g')
+					.attr("transform", "translate(" + position(var1) + "," + position(var2) + ")")
+					.append('text')
+					.attr("x", size / 2)
+					.attr("y", size / 2)
+					.text(var1)
+					.attr("text-anchor", "middle")
+
+			}
+		}
+
 
 		/*****************************/
 		/* ---- Parallell graph ---- */
 		/*****************************/
+		colors = []
+		var normalized_data = normalizeData(comparisonData)
 
 		// set the dimensions and margins of the graph
 		var margin = {
 				top: 30,
-				right: 10,
+				right: 30,
 				bottom: 10,
-				left: 0
+				left: 30
 			},
 			width = window.innerWidth - margin.left - margin.right - 40,
 			height = 400 - margin.top - margin.bottom;
@@ -293,8 +459,11 @@
 		})
 
 		// Map colors to the dates
-		var colors = normalized_data.map(obj => {
-			return {date: obj.date, color: generateRandomColor()}
+		colors = normalized_data.map(obj => {
+			return {
+				date: obj.date,
+				color: generateRandomColor()
+			}
 		})
 
 		// dimensions = d3.keys(normalized_data[0])
@@ -319,22 +488,6 @@
 			return d3.line()(dimensions.map(function (p) {
 				return [x(p), y[p](d[p])];
 			}));
-		}
-
-		// Color scale: give me a specie name, I return a color
-
-		function color(date) {
-			console.log(colors.filter(c => c.date == date))
-			return colors.filter(c => c.date == date)[0].color
-		}
-
-		function generateRandomColor() {
-			var letters = '0123456789ABCDEF';
-			var color = '#';
-			for (var i = 0; i < 6; i++) {
-				color += letters[Math.floor(Math.random() * 16)];
-			}
-			return color;
 		}
 
 		var highlight = function (d) {
@@ -364,11 +517,15 @@
 			.selectAll("myPath")
 			.data(normalized_data)
 			.enter().append("path")
-			.attr("class", function (d) { return "line " + d.date } ) // 2 class for each line: 'line' and the group name
+			.attr("class", function (d) {
+				return "line " + d.date
+			}) // 2 class for each line: 'line' and the group name
 			.attr("d", path)
 			.attr("stroke-width", 3)
 			.style("fill", "none")
-			.style("stroke", function(d){ return( color(d.date))} )
+			.style("stroke", function (d) {
+				return (color(d.date))
+			})
 			.style("opacity", 0.5)
 			.on("mouseover", highlight)
 			.on("mouseleave", doNotHighlight)
