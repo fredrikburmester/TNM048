@@ -274,214 +274,7 @@
 		return color;
 	}
 
-	/* MAIN */
-	loadData().then(obj => {
-
-		/*************************************/
-		/* ---- Load and calculate data ---- */
-		/*************************************/
-
-		var reddit_data = obj.reddit
-		var GME_data = obj.gme
-
-		var dailyStatsForReddit = calculateDailyStatsForReddit(reddit_data)
-
-		var comparisonData = calculateComparisonData(GME_data, dailyStatsForReddit, new Date("2021-03-01"));
-
-		/************************/
-		/* ---- Line graph ---- */
-		/************************/
-
-		// var data = [...comparisonData];
-		var data = normalizeData(comparisonData)
-		console.log(data)
-
-		// Dimension of the whole chart. Only one size since it has to be square
-		var marginWhole = {
-				top: 40,
-				right: 40,
-				bottom: 40,
-				left: 40
-			},
-			sizeWhole = 1000 - marginWhole.left - marginWhole.right
-
-		// Create the svg area
-		var svg = d3.select("#graph1")
-			.append("svg")
-			.attr("width", sizeWhole + marginWhole.left + marginWhole.right)
-			.attr("height", sizeWhole + marginWhole.top + marginWhole.bottom)
-			.append("g")
-			.attr("transform", "translate(" + marginWhole.left + "," + marginWhole.top + ")");
-
-		// What are the numeric variables in this dataset? How many do I have
-		var allVar = ["posts","score", "high_delta", " low"]
-
-		var numVar = allVar.length
-
-		// Now I can compute the size of a single chart
-		mar = 30
-		size = sizeWhole / numVar
-
-		// ----------------- //
-		// Scales
-		// ----------------- //
-
-		// Create a scale: gives the position of each pair each variable
-		var position = d3.scalePoint()
-			.domain(allVar)
-			.range([0, sizeWhole - size])
-
-		// Color scale: give me a specie name, I return a color
-		colors = data.map(obj => {
-			return {
-				date: obj.date,
-				color: generateRandomColor()
-			}
-		})
-
-		// ------------------------------- //
-		// Add charts
-		// ------------------------------- //
-		for (i in allVar) {
-			for (j in allVar) {
-
-				// Get current variable name
-				var var1 = allVar[i]
-				var var2 = allVar[j]
-
-				// If var1 == var2 i'm on the diagonal, I skip that
-				if (var1 === var2) {
-					continue;
-				}
-
-				// Add X Scale of each graph
-				xextent = d3.extent(data, function (d) {
-					return +d[var1]
-				})
-				var x = d3.scaleLinear()
-					.domain(xextent).nice()
-					.range([0, size - 2 * mar]);
-
-				// Add Y Scale of each graph
-				yextent = d3.extent(data, function (d) {
-					return +d[var2]
-				})
-				var y = d3.scaleLinear()
-					.domain(yextent).nice()
-					.range([size - 2 * mar, 0]);
-
-				// Add a 'g' at the right position
-				var tmp = svg
-					.append('g')
-					.attr("transform", "translate(" + (position(var1) + mar) + "," + (position(var2) + mar) + ")");
-
-				// Add X and Y axis in tmp
-				tmp.append("g")
-					.attr("transform", "translate(" + 0 + "," + (size - mar * 2) + ")")
-					.call(d3.axisBottom(x).ticks(3));
-				tmp.append("g")
-					.call(d3.axisLeft(y).ticks(3));
-
-				// Add circle
-				tmp
-					.selectAll("myCircles")
-					.data(data)
-					.enter()
-					.append("circle")
-					.attr("cx", function (d) {
-						return x(+d[var1])
-					})
-					.attr("cy", function (d) {
-						return y(+d[var2])
-					})
-					.attr("r", 3)
-					.attr("fill", function (d) {
-						return color(d.date)
-					})
-			}
-		}
-
-
-		// ------------------------------- //
-		// Add variable names = diagonal
-		// ------------------------------- //
-		for (i in allVar) {
-			for (j in allVar) {
-				// If var1 == var2 i'm on the diagonal, otherwisee I skip
-				if (i != j) {
-					continue;
-				}
-				// Add text
-				var var1 = allVar[i]
-				var var2 = allVar[j]
-				svg
-					.append('g')
-					.attr("transform", "translate(" + position(var1) + "," + position(var2) + ")")
-					.append('text')
-					.attr("x", size / 2)
-					.attr("y", size / 2)
-					.text(var1)
-					.attr("text-anchor", "middle")
-
-			}
-		}
-
-
-		/*****************************/
-		/* ---- Parallell graph ---- */
-		/*****************************/
-		colors = []
-		var normalized_data = normalizeData(comparisonData)
-
-		// set the dimensions and margins of the graph
-		var margin = {
-				top: 30,
-				right: 30,
-				bottom: 10,
-				left: 30
-			},
-			width = window.innerWidth - margin.left - margin.right - 40,
-			height = 400 - margin.top - margin.bottom;
-
-		// append the svg object to the body of the page
-		var svg = d3.select("#graph2")
-			.append("svg")
-			.attr("width", width + margin.left + margin.right)
-			.attr("height", height + margin.top + margin.bottom)
-			.append("g")
-			.attr("transform",
-				"translate(" + margin.left + "," + margin.top + ")");
-
-		// Extract the list of dimensions we want to keep in the plot. Here I keep all except the column called Species
-		dimensions = d3.keys(normalized_data[0]).filter(function (d) {
-			return (d != "date" && d != "score_delta" && d != "posts_delta" && d != "high_delta" && d !=
-				"low_delta" && d != "volume_delta")
-		})
-
-		// Map colors to the dates
-		colors = normalized_data.map(obj => {
-			return {
-				date: obj.date,
-				color: generateRandomColor()
-			}
-		})
-
-		// dimensions = d3.keys(normalized_data[0])
-
-		// For each dimension, I build a linear scale. I store all in a y object
-		var y = {}
-		for (i in dimensions) {
-			name = dimensions[i]
-			y[name] = d3.scaleLinear()
-				.domain([0, 1]) // --> Same axis range for each group
-				// --> different axis range for each group --> .domain( [d3.extent(data, function(d) { return +d[name]; })] )
-				.range([height, 0])
-		}
-
-		// Build the X scale -> it find the best position for each Y axis
-		x = d3.scalePoint()
-			.range([0, width])
-			.domain(dimensions);
+	function createParallellGraph(dimensions, data, svg, y, x) {
 
 		// The path function take a row of the csv as input, and return x and y coordinates of the line to draw for this raw.
 		function path(d) {
@@ -489,7 +282,6 @@
 				return [x(p), y[p](d[p])];
 			}));
 		}
-
 		var highlight = function (d) {
 			// first every group turns grey
 			d3.selectAll(".line")
@@ -511,11 +303,10 @@
 				})
 				.style("opacity", "1")
 		}
-
+		
 		// Draw the lines
-		svg
-			.selectAll("myPath")
-			.data(normalized_data)
+		svg.selectAll("myPath")
+			.data(data)
 			.enter().append("path")
 			.attr("class", function (d) {
 				return "line " + d.date
@@ -551,159 +342,220 @@
 				return d;
 			})
 			.style("fill", "black")
+	}
 
-		// HEX GRAPH
-		// // set the dimensions and margins of the graph
-		// var margin = {top: 10, right: 30, bottom: 30, left: 40},
-		// 	width = 460 - margin.left - margin.right,
-		// 	height = 400 - margin.top - margin.bottom;
+	/* MAIN */
+	loadData().then(obj => {
 
-		// // append the svg object to the body of the page
+		/*************************************/
+		/* ---- Load and calculate data ---- */
+		/*************************************/
+
+		var reddit_data = obj.reddit
+		var GME_data = obj.gme
+
+		var dailyStatsForReddit = calculateDailyStatsForReddit(reddit_data)
+
+		var comparisonData = calculateComparisonData(GME_data, dailyStatsForReddit, new Date("2021-03-01"));
+
+		/************************/
+		/* ---- Line graph ---- */
+		/************************/
+
+		// // var data = [...comparisonData];
+		// var data = normalizeData(comparisonData)
+		// console.log(data)
+
+		// // Dimension of the whole chart. Only one size since it has to be square
+		// var marginWhole = {
+		// 		top: 40,
+		// 		right: 40,
+		// 		bottom: 40,
+		// 		left: 40
+		// 	},
+		// 	sizeWhole = 1000 - marginWhole.left - marginWhole.right
+
+		// // Create the svg area
 		// var svg = d3.select("#graph1")
-		// .append("svg")
-		// 	.attr("width", width + margin.left + margin.right)
-		// 	.attr("height", height + margin.top + margin.bottom)
-		// .append("g")
-		// 	.attr("transform",
-		// 		"translate(" + margin.left + "," + margin.top + ")");
+		// 	.append("svg")
+		// 	.attr("width", sizeWhole + marginWhole.left + marginWhole.right)
+		// 	.attr("height", sizeWhole + marginWhole.top + marginWhole.bottom)
+		// 	.append("g")
+		// 	.attr("transform", "translate(" + marginWhole.left + "," + marginWhole.top + ")");
 
+		// // What are the numeric variables in this dataset? How many do I have
+		// var allVar = ["posts","score", "high_delta", " low"]
 
-		// // Add X axis
-		// var x = d3.scaleLinear()
-		// 	.domain([0, 1])
-		// 	.range([ 0, width ]);
-		// svg.append("g")
-		// 	.attr("transform", "translate(0," + height + ")")
-		// 	.call(d3.axisBottom(x));
+		// var numVar = allVar.length
 
-		// // Add Y axis
-		// var y = d3.scaleLinear()
-		// 	.domain([0, 1])
-		// 	.range([ height, 0 ]);
-		// svg.append("g")
-		// 	.call(d3.axisLeft(y));
+		// // Now I can compute the size of a single chart
+		// mar = 30
+		// size = sizeWhole / numVar
 
-		// var inputForHexbinFun = []
-		// normalized_data.forEach(function(d) {
-		// 	inputForHexbinFun.push( [x(d.posts), y(d.high)] ) 
+		// // ----------------- //
+		// // Scales
+		// // ----------------- //
+
+		// // Create a scale: gives the position of each pair each variable
+		// var position = d3.scalePoint()
+		// 	.domain(allVar)
+		// 	.range([0, sizeWhole - size])
+
+		// // Color scale: give me a specie name, I return a color
+		// colors = data.map(obj => {
+		// 	return {
+		// 		date: obj.date,
+		// 		color: generateRandomColor()
+		// 	}
 		// })
 
-		// // Prepare a color palette
-		// var color = d3.scaleLinear()
-		// 	.domain([0, 28]) // Number of points in the bin?
-		// 	.range(["transparent",  "#69b3a2"])
+		// // ------------------------------- //
+		// // Add charts
+		// // ------------------------------- //
+		// for (i in allVar) {
+		// 	for (j in allVar) {
 
-		// // Compute the hexbin data
-		// var hexbin = d3.hexbin()
-		// 	.radius(9) // size of the bin in px
-		// 	.extent([ [0, 0], [width, height] ])
+		// 		// Get current variable name
+		// 		var var1 = allVar[i]
+		// 		var var2 = allVar[j]
 
-		// // Plot the hexbins
-		// svg.append("clipPath")
-		// 	.attr("id", "clip")
-		// 	.append("rect")
-		// 	.attr("width", width)
-		// 	.attr("height", height)
+		// 		// If var1 == var2 i'm on the diagonal, I skip that
+		// 		if (var1 === var2) {
+		// 			continue;
+		// 		}
 
-		// svg.append("g")
-		// 	.attr("clip-path", "url(#clip)")
-		// 	.selectAll("path")
-		// 	.data( hexbin(inputForHexbinFun) )
-		// 	.enter().append("path")
-		// 	.attr("d", hexbin.hexagon())
-		// 	.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
-		// 	.attr("fill", function(d) { return color(d.length); })
-		// 	.attr("stroke", "black")
-		// 	.attr("stroke-width", "0.1")
+		// 		// Add X Scale of each graph
+		// 		xextent = d3.extent(data, function (d) {
+		// 			return +d[var1]
+		// 		})
+		// 		var x = d3.scaleLinear()
+		// 			.domain(xextent).nice()
+		// 			.range([0, size - 2 * mar]);
+
+		// 		// Add Y Scale of each graph
+		// 		yextent = d3.extent(data, function (d) {
+		// 			return +d[var2]
+		// 		})
+		// 		var y = d3.scaleLinear()
+		// 			.domain(yextent).nice()
+		// 			.range([size - 2 * mar, 0]);
+
+		// 		// Add a 'g' at the right position
+		// 		var tmp = svg
+		// 			.append('g')
+		// 			.attr("transform", "translate(" + (position(var1) + mar) + "," + (position(var2) + mar) + ")");
+
+		// 		// Add X and Y axis in tmp
+		// 		tmp.append("g")
+		// 			.attr("transform", "translate(" + 0 + "," + (size - mar * 2) + ")")
+		// 			.call(d3.axisBottom(x).ticks(3));
+		// 		tmp.append("g")
+		// 			.call(d3.axisLeft(y).ticks(3));
+
+		// 		// Add circle
+		// 		tmp
+		// 			.selectAll("myCircles")
+		// 			.data(data)
+		// 			.enter()
+		// 			.append("circle")
+		// 			.attr("cx", function (d) {
+		// 				return x(+d[var1])
+		// 			})
+		// 			.attr("cy", function (d) {
+		// 				return y(+d[var2])
+		// 			})
+		// 			.attr("r", 3)
+		// 			.attr("fill", function (d) {
+		// 				return color(d.date)
+		// 			})
+		// 	}
+		// }
+
+
+		// // ------------------------------- //
+		// // Add variable names = diagonal
+		// // ------------------------------- //
+		// for (i in allVar) {
+		// 	for (j in allVar) {
+		// 		// If var1 == var2 i'm on the diagonal, otherwisee I skip
+		// 		if (i != j) {
+		// 			continue;
+		// 		}
+		// 		// Add text
+		// 		var var1 = allVar[i]
+		// 		var var2 = allVar[j]
+		// 		svg
+		// 			.append('g')
+		// 			.attr("transform", "translate(" + position(var1) + "," + position(var2) + ")")
+		// 			.append('text')
+		// 			.attr("x", size / 2)
+		// 			.attr("y", size / 2)
+		// 			.text(var1)
+		// 			.attr("text-anchor", "middle")
+
+		// 	}
+		// }
+
+
+		/*****************************/
+		/* ---- Parallell graph ---- */
+		/*****************************/
+
+		colors = []
+		var normalized_data = normalizeData(comparisonData)
+		var data = [...normalized_data];
+
+		// set the dimensions and margins of the graph
+		var margin = {
+				top: 30,
+				right: 30,
+				bottom: 10,
+				left: 30
+			},
+			width = window.innerWidth - margin.left - margin.right - 40,
+			height = 400 - margin.top - margin.bottom;
+
+		// append the svg object to the body of the page
+		var svg = d3.select("#graph2")
+			.append("svg")
+			.attr("width", width + margin.left + margin.right)
+			.attr("height", height + margin.top + margin.bottom)
+			.append("g")
+			.attr("transform",
+				"translate(" + margin.left + "," + margin.top + ")");
+
+		// Extract the list of dimensions we want to keep in the plot. Here I keep all except the column called Species
+		dimensions = d3.keys(data[0]).filter(function (d) {
+			return (d != "date" && d != "score_delta" && d != "posts_delta" && d != "high_delta" && d !=
+				"low_delta" && d != "volume_delta")
+		})
+
+		// Map colors to the dates
+		colors = data.map(obj => {
+			return {
+				date: obj.date,
+				color: generateRandomColor()
+			}
+		})
+		
+		// For each dimension, I build a linear scale. I store all in a y object
+		var y = {}
+		for (i in dimensions) {
+			name = dimensions[i]
+			y[name] = d3.scaleLinear()
+				.domain([0, 1]) // --> Same axis range for each group
+				//.domain( [d3.extent(data, function(d) { return +d['posts']; })] )
+				.range([height, 0])
+		}
+
+		// Build the X scale -> it find the best position for each Y axis
+		x = d3.scalePoint()
+			.range([0, width])
+			.domain(dimensions);
+
+		createParallellGraph(dimensions, data, svg, y, x)
+
+		
 	})
 
-	/* GRAPHING FUNCTIONS */
-	var data = null;
-
-	var margin = {
-			top: 10,
-			right: 20,
-			bottom: 30,
-			left: 50
-		},
-		width = "1000",
-		height = "500";
-
-	// append the svg object to the body of the page
-	// var svg = d3.select("#graph1")
-	// 	.append("svg")
-	// 	.attr("width", width + margin.left + margin.right)
-	// 	.attr("height", height + margin.top + margin.bottom)
-	// 	.append("g")
-	// 	.attr("transform",
-	// 		"translate(" + margin.left + "," + margin.top + ")");
-
-
-	// function cleanData(data) {
-	// 	data.forEach((row, i) => {
-	// 		for (let key in row) {
-	// 			if (row[key] === undefined || row[key === null]) {
-	// 				row[key] = ""
-	// 			}
-	// 		}
-	// 	});
-
-	// 	console.table(data)
-
-	// 	return data
-	// }
-
-	// d3.csv("/static/data/GME.csv", function (d) {
-	// 	return {
-	// 		date: new Date(d.Date),
-	// 		open: d.Open,
-	// 		high: d.High,
-	// 		low: d.Low,
-	// 		volume: d.Volume
-	// 	};
-	// }, function (error, rows) {
-
-	// 	var data = rows
-
-	// 	var x = d3.scaleTime()
-	// 		.domain(d3.extent(data, function (d) {
-	// 			return d.date;
-	// 		}))
-	// 		.range([0, width]);
-
-	// 	svg.append("g")
-	// 		.attr("transform", "translate(0," + height + ")")
-	// 		.call(d3.axisBottom(x));
-
-	// 	// Add Y axis
-	// 	var y = d3.scaleLinear()
-	// 		.domain([0, 500])
-	// 		.range([height, 0]);
-	// 	svg.append("g")
-	// 		.call(d3.axisLeft(y));
-
-	// 	// Add a scale for bubble size
-	// 	var z = d3.scaleLinear()
-	// 		.domain([100000, 200000000])
-	// 		.range([1, 40]);
-
-	// 	// Add dots
-	// 	svg.append('g')
-	// 		.selectAll("dot")
-	// 		.data(data)
-	// 		.enter()
-	// 		.append("circle")
-	// 		.attr("cx", function (d) {
-	// 			return x(d.date);
-	// 		})
-	// 		.attr("cy", function (d) {
-	// 			return y(d.high);
-	// 		})
-	// 		.attr("r", function (d) {
-	// 			return z(d.volume);
-	// 		})
-	// 		.style("fill", "#69b3a2")
-	// 		.style("opacity", "0.7")
-	// 		.attr("stroke", "black")
-	// });
 </script>
