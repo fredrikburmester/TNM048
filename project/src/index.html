@@ -9,6 +9,7 @@
 	<script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"
 		integrity="sha256-4+XzXVhsDmqanXGHaHvgh1gMQKX40OUvDEBTu8JcmNs=" crossorigin="anonymous"></script>
 	<script src="/static/js/jquery-csv.js"></script>
+	<script src="https://d3js.org/d3-hexbin.v0.2.min.js"></script>
 	<title>Project</title>
 </head>
 
@@ -23,12 +24,35 @@
 </style>
 
 <body>
-	<div id="graph1"></div>
+	<style>
+		#grid {
+			display: grid;
+			grid-template-rows: 1fr 1fr;
+			row-gap: 100px;
+			padding: 20px;
+		}
+	</style>
+
+	<div id="grid">
+		<div id="graph1"></div>
+
+		<div id="graph2-container">
+			<h2>Data comparison</h2>
+			<div id="graph2"></div>
+		</div>
+	</div>
 </body>
 
 </html>
 
 <script>
+	function compareDates(date1, date2) {
+		let d1 = `${date1.getFullYear()}-${date1.getMonth()+1}-${date1.getDate()}`
+		let d2 = `${date2.getFullYear()}-${date2.getMonth()+1}-${date2.getDate()}`
+
+		return d1 == d2
+	}
+
 	/*
 	 * Clean the data based on date, so that both data sets match in date
 	 *
@@ -37,59 +61,65 @@
 	 *
 	 * @return {object} 
 	 */
-	function cleanData(data1, data2, startDate, endDate) {
-		var new_data1 = []
-		var new_data2 = []
+	function calculateComparisonData(gme, interactions, endDate) {
+		var new_data = []
 
-		startDate.setHours(0,0,0,0)
-		endDate.setHours(0,0,0,0)
+		var obj = {
+			date: null,
+			posts: 0,
+			score: 0,
+			score_per_post: 0,
+			score_delta: 0,
+			posts_delta: 0,
+			high: 0,
+			low: 0,
+			volume: 0,
+			volume_delta: 0
+		}
 
-		console.log(data1)
-		console.log(data2)
+		for (let i = 1; i < gme.length; i++) {
+			const stock = gme[i];
 
-		console.log(startDate, endDate)
-
-		data1.forEach(element => {
-			element.date.setHours(0,0,0,0)
-			if (element.date >= startDate && element.date <= endDate && element.date.getDay() != 6 && element.date.getDay() != 0) {	
-				new_data1.push(element)
-			}
-			
-			data2.forEach(element2 => {
-				if (element.date >= startDate && element.date <= endDate && element.date.getDay() != "6" && element.date.getDay() != "0") {
-					console.log(element.date.getDay(), element)
+			let interaction = interactions.filter(i => compareDates(i.date, stock.date))
+			if (interaction.length > 0) {
+				interaction = interaction[0]
+				obj = {
+					date: stock.date,
+					posts: interaction.posts,
+					score: interaction.score,
+					score_per_post: interaction.score_per_post,
+					score_delta: interaction.score_delta,
+					posts_delta: interaction.posts_delta,
+					high: stock.high,
+					high_delta: stock.high - obj.high,
+					low: stock.low,
+					low_delta: stock.low - obj.low,
+					volume: stock.volume,
+					volume_delta: stock.volume - obj.volume_delta,
 				}
-			});
-		});
 
-		data2.forEach(element => {
-			element.date.setHours(0,0,0,0)
-			if (element.date >= startDate && element.date <= endDate && element.date.getDay() != "6" && element.date.getDay() != "0") {
-				
-				console.log(element.date.getDay(), element)
+				new_data.push(obj)
 			}
-		});
+		}
 
-
-
-		if (new_data1.length != new_data2.length) {
-			console.log(new_data1.length, new_data2.length)
-			throw "Datasets are not the same length!"
-		} else
-			return {
-				data1: data1,
-				data2: data2
-			}
+		return new_data
 	}
 
 	/*
 	 * Calculate interractions per day, like posts, comments and total score. Return array with that informaion
 	 *
 	 * @param {obejct} data
-	 * @return {object} interactions
+	 * @return {object} dailyStatsForReddit
 	 */
-	function calculateDailyStats(data) {
-		var interactions = []
+	function calculateDailyStatsForReddit(data) {
+		var dailyStatsForReddit = []
+		var day = {
+			date: null,
+			posts: 0,
+			score: 0,
+			score_per_post: 0
+		}
+
 
 		var now = new Date();
 		for (var d = new Date(2021, 0, 28); d <= now; d.setDate(d.getDate() + 1)) {
@@ -99,27 +129,36 @@
 
 			for (let i = 0; i < data.length; i++) {
 				const post = data[i];
-				
+
 				let post_date = `${post.date.getFullYear()}-${post.date.getMonth()+1}-${post.date.getDate()}`
-				
-				if (post_date == todays_date ) {
+
+				if (post_date == todays_date) {
 					posts_this_day.push(post)
 					total_score_this_day += parseInt(post.score)
 				}
 			}
 
-			// Create object and push into interactions array
-			let day = {
+			let score_per_post = posts_this_day.length / total_score_this_day
+
+			let score_delta = total_score_this_day - day.score
+			let posts_delta = posts_this_day.length - day.posts
+
+
+			// Create object and push into dailyStatsForReddit array
+			var day = {
 				date: new Date(todays_date),
 				posts: posts_this_day.length,
-				score: total_score_this_day
+				score: total_score_this_day,
+				score_per_post: score_per_post,
+				score_delta: score_delta,
+				posts_delta: posts_delta
 			}
 
 			// if(posts_this_day != 0)
-				interactions.push(day)
+			dailyStatsForReddit.push(day)
 		}
 
-		return interactions
+		return dailyStatsForReddit
 	}
 
 	/*
@@ -175,28 +214,253 @@
 			};
 		});
 
-		return {reddit: REDDIT, gme: GME}
+		return {
+			reddit: REDDIT,
+			gme: GME
+		}
+	}
+
+	function normalizeData(data) {
+		// var normalized_data
+
+		for (key in data[0]) {
+			let max = Math.max.apply(Math, data.map(function (e) {
+				return e[key];
+			}))
+			let min = Math.min.apply(Math, data.map(function (e) {
+				return e[key];
+			}))
+
+			data.forEach(e => {
+				if (key != "date")
+					e[key] = (e[key] - min) / (max - min)
+				else {
+					let d = `${e[key].getFullYear()}${e[key].getMonth()}${e[key].getDate()}`
+					console.log(d)
+					e[key] = "d-" + d.toString()
+				}
+			});
+		}
+
+		return data
 	}
 
 	/* MAIN */
 	loadData().then(obj => {
+
+		/*************************************/
+		/* ---- Load and calculate data ---- */
+		/*************************************/
+
 		const REDDIT = obj.reddit
 		const GME = obj.gme
 
-		var small_reddit = []
-		for (let i = REDDIT.length-10000; i < REDDIT.length; i++) {
-			const e = REDDIT[i];
-			small_reddit.push(e)
+		var dailyStatsForReddit = calculateDailyStatsForReddit(REDDIT)
+
+		var comparisonData = calculateComparisonData(GME, dailyStatsForReddit, new Date("2021-03-01"))
+
+		normalized_data = normalizeData(comparisonData)
+
+		console.log("Normalized data: ", normalized_data)
+
+		/*****************************/
+		/* ---- Parallell graph ---- */
+		/*****************************/
+
+		// set the dimensions and margins of the graph
+		var margin = {
+				top: 30,
+				right: 10,
+				bottom: 10,
+				left: 0
+			},
+			width = window.innerWidth - margin.left - margin.right - 40,
+			height = 400 - margin.top - margin.bottom;
+
+		// append the svg object to the body of the page
+		var svg = d3.select("#graph2")
+			.append("svg")
+			.attr("width", width + margin.left + margin.right)
+			.attr("height", height + margin.top + margin.bottom)
+			.append("g")
+			.attr("transform",
+				"translate(" + margin.left + "," + margin.top + ")");
+
+		// Extract the list of dimensions we want to keep in the plot. Here I keep all except the column called Species
+		dimensions = d3.keys(normalized_data[0]).filter(function (d) {
+			return (d != "date" && d != "score_delta" && d != "posts_delta" && d != "high_delta" && d !=
+				"low_delta" && d != "volume_delta")
+		})
+
+		// Map colors to the dates
+		var colors = normalized_data.map(obj => {
+			return {date: obj.date, color: generateRandomColor()}
+		})
+
+		// dimensions = d3.keys(normalized_data[0])
+
+		// For each dimension, I build a linear scale. I store all in a y object
+		var y = {}
+		for (i in dimensions) {
+			name = dimensions[i]
+			y[name] = d3.scaleLinear()
+				.domain([0, 1]) // --> Same axis range for each group
+				// --> different axis range for each group --> .domain( [d3.extent(data, function(d) { return +d[name]; })] )
+				.range([height, 0])
 		}
-		var interactions = calculateDailyStats(REDDIT)
-		console.log(interactions)
 
-		var cleaned_data = cleanData(GME, interactions, new Date("2021-01-28"),new Date("2021-03-01"))
-		console.log(cleaned_data)
+		// Build the X scale -> it find the best position for each Y axis
+		x = d3.scalePoint()
+			.range([0, width])
+			.domain(dimensions);
 
+		// The path function take a row of the csv as input, and return x and y coordinates of the line to draw for this raw.
+		function path(d) {
+			return d3.line()(dimensions.map(function (p) {
+				return [x(p), y[p](d[p])];
+			}));
+		}
+
+		// Color scale: give me a specie name, I return a color
+
+		function color(date) {
+			console.log(colors.filter(c => c.date == date))
+			return colors.filter(c => c.date == date)[0].color
+		}
+
+		function generateRandomColor() {
+			var letters = '0123456789ABCDEF';
+			var color = '#';
+			for (var i = 0; i < 6; i++) {
+				color += letters[Math.floor(Math.random() * 16)];
+			}
+			return color;
+		}
+
+		var highlight = function (d) {
+			// first every group turns grey
+			d3.selectAll(".line")
+				.transition().duration(200)
+				.style("stroke", "lightgrey")
+				.style("opacity", "0.2")
+			// Second the hovered specie takes its color
+			d3.selectAll("." + d.date)
+				.transition().duration(200)
+				.style("stroke", color(d.date))
+				.style("opacity", "1")
+		}
+
+		var doNotHighlight = function (d) {
+			d3.selectAll(".line")
+				.transition().duration(200).delay(1000)
+				.style("stroke", function (d) {
+					return (color(d.date))
+				})
+				.style("opacity", "1")
+		}
+
+		// Draw the lines
+		svg
+			.selectAll("myPath")
+			.data(normalized_data)
+			.enter().append("path")
+			.attr("class", function (d) { return "line " + d.date } ) // 2 class for each line: 'line' and the group name
+			.attr("d", path)
+			.attr("stroke-width", 3)
+			.style("fill", "none")
+			.style("stroke", function(d){ return( color(d.date))} )
+			.style("opacity", 0.5)
+			.on("mouseover", highlight)
+			.on("mouseleave", doNotHighlight)
+
+		// Draw the axis:
+		svg.selectAll("myAxis")
+			// For each dimension of the dataset I add a 'g' element:
+			.data(dimensions).enter()
+			.append("g")
+			// I translate this element to its right position on the x axis
+			.attr("transform", function (d) {
+				return "translate(" + x(d) + ")";
+			})
+			// And I build the axis with the call function
+			.each(function (d) {
+				d3.select(this).call(d3.axisLeft().scale(y[d]));
+			})
+			// Add axis title
+			.append("text")
+			.style("text-anchor", "middle")
+			.attr("y", -9)
+			.text(function (d) {
+				return d;
+			})
+			.style("fill", "black")
+
+		// HEX GRAPH
+		// // set the dimensions and margins of the graph
+		// var margin = {top: 10, right: 30, bottom: 30, left: 40},
+		// 	width = 460 - margin.left - margin.right,
+		// 	height = 400 - margin.top - margin.bottom;
+
+		// // append the svg object to the body of the page
+		// var svg = d3.select("#graph1")
+		// .append("svg")
+		// 	.attr("width", width + margin.left + margin.right)
+		// 	.attr("height", height + margin.top + margin.bottom)
+		// .append("g")
+		// 	.attr("transform",
+		// 		"translate(" + margin.left + "," + margin.top + ")");
+
+
+		// // Add X axis
+		// var x = d3.scaleLinear()
+		// 	.domain([0, 1])
+		// 	.range([ 0, width ]);
+		// svg.append("g")
+		// 	.attr("transform", "translate(0," + height + ")")
+		// 	.call(d3.axisBottom(x));
+
+		// // Add Y axis
+		// var y = d3.scaleLinear()
+		// 	.domain([0, 1])
+		// 	.range([ height, 0 ]);
+		// svg.append("g")
+		// 	.call(d3.axisLeft(y));
+
+		// var inputForHexbinFun = []
+		// normalized_data.forEach(function(d) {
+		// 	inputForHexbinFun.push( [x(d.posts), y(d.high)] ) 
+		// })
+
+		// // Prepare a color palette
+		// var color = d3.scaleLinear()
+		// 	.domain([0, 28]) // Number of points in the bin?
+		// 	.range(["transparent",  "#69b3a2"])
+
+		// // Compute the hexbin data
+		// var hexbin = d3.hexbin()
+		// 	.radius(9) // size of the bin in px
+		// 	.extent([ [0, 0], [width, height] ])
+
+		// // Plot the hexbins
+		// svg.append("clipPath")
+		// 	.attr("id", "clip")
+		// 	.append("rect")
+		// 	.attr("width", width)
+		// 	.attr("height", height)
+
+		// svg.append("g")
+		// 	.attr("clip-path", "url(#clip)")
+		// 	.selectAll("path")
+		// 	.data( hexbin(inputForHexbinFun) )
+		// 	.enter().append("path")
+		// 	.attr("d", hexbin.hexagon())
+		// 	.attr("transform", function(d) { return "translate(" + d.x + "," + d.y + ")"; })
+		// 	.attr("fill", function(d) { return color(d.length); })
+		// 	.attr("stroke", "black")
+		// 	.attr("stroke-width", "0.1")
 	})
-	/* GRAPHING FUNCTIONS */
 
+	/* GRAPHING FUNCTIONS */
 	var data = null;
 
 	var margin = {
