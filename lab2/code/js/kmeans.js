@@ -38,7 +38,7 @@ function kmeans(data, k) {
 
         console.log(qualityChange)
         
-    } while (qualityChange > 0.0000000001)
+    } while (qualityChange > 0.001)
 
     //Return results
     return {
